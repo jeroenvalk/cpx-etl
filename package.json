@@ -1,0 +1,10 @@
+{
+  "name": "cpx-etl",
+  "version": "0.1.0",
+  "repository": "git@github.com:jeroenvalk/cpx-etl.git",
+  "main": "src/main",
+  "dependencies": {
+    "underscore": "~1.8.3",
+    "q": "~1.4.1"
+  }
+}
