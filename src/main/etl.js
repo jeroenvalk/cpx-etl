@@ -20,6 +20,10 @@ define(function() {
 //	var mysql = require('mysql');
 	var _ = require('underscore');
 	var Q = require('q');
+	var logger = require('winston');
+	//logger.level = 'info';
+	logger.info('Hello World');
+
 
 	this.constructor = function ETL(logger, views) {
 		this.logger = logger;
@@ -30,6 +34,16 @@ define(function() {
 		this.views.push(fn());
 	};
 	
+	this.attributes = function attributes(bfish) {
+		var result = {};
+		_.each(_.filter(_.keys(bfish), function(key) {
+			return key.charAt(0) === '@';
+		}), function(key) {
+			result[key.substr(1)] = bfish[key];
+		});	
+		return result;
+	};
+
 	this.toBadgerfish = function ETL$toBadgerfish(data) {
 		if (data instanceof Array) {
 			return _.map(data, function(data) {
@@ -200,26 +214,42 @@ define(function() {
 		}
 	};
 
-	this.load = function ETL$load(table, bfish) {
-		var self = this;
-		self.logger.info('ETL$load: ' + table + ' ' + JSON.stringify(bfish));
-		if (bfish instanceof Array) {
-			return Q.all(_.map(bfish, function(bfish) {
-				return this.load(table, bfish);
-			}, this))
-		}
-		if (bfish instanceof Object) {
-			var keys = _.keys(bfish);
-			var related = _.filter(keys, function(key) {
-				return key.charAt(0) !== '@';
-			});
-			return insertRelated(table, bfish, self.logger).then(function() {
-				return Q.all(_.map(related, function(table) {
-					return insertRelated(table, bfish[table], self.logger);
-				})).then(function() {
-					return bfish;
+	this.load = function ETL$load(view, table, target, source) {
+		console.log(view.load);
+		console.log(table);
+		var fn = view.load[table];
+		if (fn) {
+			try {
+				var argv = Array.prototype.slice.call(arguments, 2);
+				return fn.apply(this, argv).catch(function(error) {
+					logger.error(error);
+					throw error;
+				});				
+			} catch(e) {
+				logger.error(e);
+				throw e;
+			}
+		} else {
+			var self = this;
+			self.logger.info('ETL$load: ' + table + ' ' + JSON.stringify(bfish));
+			if (bfish instanceof Array) {
+				return Q.all(_.map(bfish, function(bfish) {
+					return this.load(table, bfish);
+				}, this))
+			}
+			if (bfish instanceof Object) {
+				var keys = _.keys(bfish);
+				var related = _.filter(keys, function(key) {
+					return key.charAt(0) !== '@';
 				});
-			})
+				return insertRelated(table, bfish, self.logger).then(function() {
+					return Q.all(_.map(related, function(table) {
+						return insertRelated(table, bfish[table], self.logger);
+					})).then(function() {
+						return bfish;
+					});
+				})
+			}			
 		}
 	};
 });
