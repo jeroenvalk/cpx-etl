@@ -1,18 +1,7 @@
-var myModule, proto;
+var ETL = require('./etl.js');
 
-var _define = GLOBAL.define;
-
-GLOBAL.define = function(fn) {
-	proto = {};
-	myModule = fn.call(proto);
-	proto.constructor.prototype = proto;
-};
-
-var views = [];
-
-require('./etl.js');
-proto.constructor.initialize();
-proto.constructor.register(function() {
+ETL.initialize();
+ETL.register(function() {
 	return {
 		match: {
 			_: 'ETL$convert'
@@ -28,12 +17,5 @@ proto.constructor.register(function() {
 		}
 	};
 });
-proto.constructor({
-	info : function(msg) {
-		console.log('[INFO] ' + msg);
-	}
-}, views);
 
-module.exports = proto.constructor;
-
-GLOBAL.define = _define;
+module.exports = ETL;

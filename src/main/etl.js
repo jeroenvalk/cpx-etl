@@ -15,18 +15,39 @@
  * along with ComPosiX. If not, see <http://www.gnu.org/licenses/>.
  */
 
-define(function() {
-	'use strict';
+'use strict';
 
-	//	var mysqlLib = require('../../mySQLlibrary');
-	//	var mysql = require('mysql');
-	var _ = require('underscore');
-	var Q = require('q');
-	var logger = require('winston');
-	//logger.level = 'info';
-	logger.info('Hello World');
+// var mysqlLib = require('../../mySQLlibrary');
+// var mysql = require('mysql');
+var _ = require('underscore');
+var Q = require('q');
+var logger = require('winston');
+// logger.level = 'info';
+logger.info('Hello World');
 
-	this.constructor = function ETL() {
+var etl = null;
+var registry = null;
+
+var dollar = function(view, bfish, promise) {
+	return function $(key) {
+		if (_.has(view.validation, key)) {
+			if (_.has(view.extract, key)) {
+				return promise[key];
+			} else {
+				return Q.fcall(function() {
+					return bfish[key];
+				});
+			}
+		} else {
+			throw new Error('$: key not found');
+		}
+	}
+};
+
+module.exports = class ETL {
+
+
+	constructor() {
 		this.logger = logger;
 		this.views = [];
 		this.mapping = null;
@@ -34,29 +55,26 @@ define(function() {
 		this.setAsRegistry();
 	};
 
-	var etl = null;
-	var registry = null;
-
-	this.constructor.initialize = function ETL$initialize() {
+	static initialize() {
 		if (etl) {
 			throw new Error('ETL$initialize: already initialized');
 		}
 		etl = new this();
 	};
 
-	this.constructor.register = function ETL$register(fn) {
+	static register(fn) {
 		registry.register(fn);
 	};
 
-	this.register = function ETL$register(fn) {
+	register(fn) {
 		this.views.push(fn());
 	};
 
-	this.setAsRegistry = function ETL$setAsRegistry() {
+	setAsRegistry() {
 		registry = this;
 	};
 
-	this.attributes = function attributes(bfish) {
+	attributes(bfish) {
 		var result = {};
 		_.each(_.filter(_.keys(bfish), function(key) {
 			return key.charAt(0) === '@';
@@ -66,7 +84,7 @@ define(function() {
 		return result;
 	};
 
-	var convertJSONtoJSON = function ETL$convertJSONtoJSON(data, options) {
+	convertJSONtoJSON(data, options) {
 		if (data instanceof Array) {
 			return _.map(data, function(data) {
 				return convertJSONtoJSON(data);
@@ -74,7 +92,7 @@ define(function() {
 		} else if (data instanceof Object) {
 			return _.object(_.map(_.pairs(data), function(entry) {
 				if (entry[1] instanceof Object) {
-					entry[1] = convertJSONtoJSON(entry[1]);
+					entry[1] = this.convertJSONtoJSON(entry[1]);
 				} else {
 					if (entry[0].charAt(0) === '@') {
 						if (!options.toBfish) {
@@ -87,27 +105,27 @@ define(function() {
 					}
 				}
 				return entry;
-			}));
+			}, this));
 		} else {
 			throw new Error("ETL$convertJSONtoJSON: array or object required");
 		}
 	};
 
-	this.toBadgerfish = function ETL$toBadgerfish(data) {
+	toBadgerfish(data) {
 		convertJSONtoJSON(data);
 	};
 
-	this.detectMsgType = function ETL$detectMessageType(msg) {
+	detectMessageType(msg) {
 		return 'JSON';
 	};
 
-	this.reset = function ETL$reset() {
+	reset() {
 		this.phase = 0;
 		this.mapping = null;
 		this.message = null;
 	};
 	
-	this.match = function ETL$match(msg, mapping) {
+	match(msg, mapping) {
 		this.reset(); ++this.phase;
 		if (!mapping) {
 			var meta = _.pick(msg, _.filter(_.keys(msg), function(key) {
@@ -127,19 +145,19 @@ define(function() {
 		this.mapping = mapping;
 	};
 
-	var applyPatch = function ETL$patch(message, patch) {
+	applyPatch(message, patch) {
 		if (message instanceof Array) {
 			_.each(message, function(msg) {
-				applyPatch(msg, path);
-			});
+				this.applyPatch(msg, path);
+			}, this);
 			return message;
 		}
 		_.each(_.keys(patch), function(key) {
-			apply(message, key.split('.'), patch[key]);
-		});
+			this.apply(message, key.split('.'), patch[key]);
+		}, this);
 	};
 
-	this.defaults = function ETL$defaults(message, mapping) {
+	defaults(message, mapping) {
 		var error;
 		switch (this.phase) {
 		case 0:
@@ -153,30 +171,30 @@ define(function() {
 		if (error) {
 			throw error;
 		}
-		applyPatch(this.message, this.mapping.defaults);
+		this.applyPatch(this.message, this.mapping.defaults);
 		return this.message;
 	};
 
-	this.convert = function ETL$convert(source, options) {
+	convert(source, options) {
 		options = etl.defaults(_.extend({
 			_ : 'ETL$convert'
 		}, options));
 		if (!options.sourceMsgType) {
-			options.sourceMsgType = this.detectMsgType(source);
+			options.sourceMsgType = this.detectMessageType(source);
 		}
 		switch (options.sourceMsgType) {
 		case 'JSON':
 			switch (options.targetMsgType) {
 			case 'JSON':
 			default:
-				return convertJSONtoJSON(source, options);
+				return this.convertJSONtoJSON(source, options);
 			}
 		default:
 			throw new Error('ETL$convert: unknown message type');
 		}
 	};
 
-	this.isValid = function ETL$isValid(key, value, fn) {
+	isValid(key, value, fn) {
 		var result;
 		if (_.isFunction(fn)) {
 			result = fn(value) !== undefined;
@@ -189,7 +207,7 @@ define(function() {
 		return result;
 	};
 
-	this.makeValid = function ETL$makeValid(value, fn) {
+	makeValid(value, fn) {
 		if (_.isFunction(fn)) {
 			return fn(value);
 		} else {
@@ -197,7 +215,7 @@ define(function() {
 		}
 	};
 
-	this.validate = function ETL$validate(view, sample) {
+	validate(view, sample) {
 		var self = this;
 		return _.map(_.filter(_.keys(view.validation), function(key) {
 			return key.charAt(0) === '@' && !self.isValid(key, sample[key], view.validation[key]);
@@ -206,7 +224,7 @@ define(function() {
 		});
 	};
 
-	this.getMapping = function ETL$getMapping(sample, metaOnly) {
+	getMapping(sample, metaOnly) {
 		return _.find(this.views, function(view) {
 			return _.every(_.keys(view.validation), function(key) {
 				return ((metaOnly || key.charAt(0) !== '@') && key.charAt(0) !== '_') || (this.isValid(key, sample[key], view.validation[key]));
@@ -214,7 +232,7 @@ define(function() {
 		}, this);
 	};
 
-	var apply = function ETL$apply(result, path, value) {
+	apply(result, path, value) {
 		if (path.length > 1) {
 			var part = path.shift();
 			if (!isNaN(part))
@@ -223,14 +241,14 @@ define(function() {
 				result[part] = (isNaN(path[0]) ? {} : []);
 			}
 			result = result[part];
-			apply(result, path, value);
+			this.apply(result, path, value);
 		} else {
 			if (result[path[0]] === undefined)
 				result[path[0]] = value;
 		}
 	};
 
-	this.transform = function ETL$transform(view, data, isPlain) {
+	transform(view, data, isPlain) {
 		if (data instanceof Array) {
 			return _.map(data, function(data) {
 				return this.transform(view, data, isPlain);
@@ -260,23 +278,7 @@ define(function() {
 		}
 	};
 
-	var dollar = function(view, bfish, promise) {
-		return function $(key) {
-			if (_.has(view.validation, key)) {
-				if (_.has(view.extract, key)) {
-					return promise[key];
-				} else {
-					return Q.fcall(function() {
-						return bfish[key];
-					});
-				}
-			} else {
-				throw new Error('$: key not found');
-			}
-		}
-	};
-
-	this.extract = function ETL$extract(bfish, mapping) {
+	extract(bfish, mapping) {
 		var view;
 		switch (this.phase) {
 		case 0:
@@ -305,7 +307,7 @@ define(function() {
 		throw new Error("ETL$extract: array or object required");
 	};
 
-	var runSQL = function ETL$runSQL(sql) {
+	runSQL(sql) {
 		var deferred = Q.defer();
 		mysqlLib.query(sql, function(err, detailRows, fields) {
 			if (err) {
@@ -317,7 +319,7 @@ define(function() {
 		return deferred.promise;
 	};
 
-	var insertRelated = function ETL$insertRelated(table, bfish, logger) {
+	insertRelated(table, bfish, logger) {
 		if (bfish instanceof Array) {
 			return Q.all(_.map(bfish, function(bfish) {
 				return insertRelated(table, bfish, logger);
@@ -339,7 +341,7 @@ define(function() {
 		}
 	};
 
-	this.load = function ETL$load(view, table, target, source) {
+	load(view, table, target, source) {
 		console.log(view.load);
 		console.log(table);
 		var fn = view.load[table];
@@ -378,4 +380,4 @@ define(function() {
 		}
 	};
 
-});
+};
