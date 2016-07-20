@@ -1,7 +1,8 @@
 var ETL = require('./etl.js');
-
-ETL.initialize();
-ETL.register(function() {
+var etl = new ETL({
+	logger : require('winston')
+});
+etl.register(function() {
 	return {
 		match : {
 			_ : 'ETL$convert'

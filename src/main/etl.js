@@ -17,16 +17,10 @@
 
 'use strict';
 
-// var mysqlLib = require('../../mySQLlibrary');
-// var mysql = require('mysql');
 var _ = require('underscore');
 var Q = require('q');
-var logger = require('winston');
-// logger.level = 'info';
-logger.info('Hello World');
 
-var etl = null;
-var registry = null;
+var instance = null;
 
 var dollar = function(view, bfish, promise) {
 	return function $(key) {
@@ -46,32 +40,20 @@ var dollar = function(view, bfish, promise) {
 
 module.exports = class ETL {
 
-
-	constructor() {
-		this.logger = logger;
+	constructor(inject) {
+		if (!instance) {
+			instance = this;
+		}
+		// defaults
 		this.views = [];
 		this.mapping = null;
 		this.phase = 0;
-		this.setAsRegistry();
-	};
-
-	static initialize() {
-		if (etl) {
-			throw new Error('ETL$initialize: already initialized');
-		}
-		etl = new this();
-	};
-
-	static register(fn) {
-		registry.register(fn);
+		
+		_.extend(this, inject);
 	};
 
 	register(fn) {
 		this.views.push(fn());
-	};
-
-	setAsRegistry() {
-		registry = this;
 	};
 
 	attributes(bfish) {
@@ -176,7 +158,7 @@ module.exports = class ETL {
 	};
 
 	convert(source, options) {
-		options = etl.defaults(_.extend({
+		options = instance.defaults(_.extend({
 			_ : 'ETL$convert'
 		}, options));
 		if (!options.sourceMsgType) {
