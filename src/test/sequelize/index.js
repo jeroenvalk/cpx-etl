@@ -1,4 +1,5 @@
 var _ = require('underscore');
+var Q = require('q');
 var Sequelize = require('sequelize');
 var model = require('./model');
 
@@ -33,14 +34,17 @@ module.exports = sequelize.authenticate()['catch'](function(e) {
 				}
 			})
 		});
-		return null;
-		// TODO: fix this line below
 		return sequelize.define(key.toLowerCase(), attributes, {
 			freezeTableName : true
 		});
 	});
-	console.log(result);
-	return result;
+	return Q.all(_.map(_.values(result), function(model) {
+		model.sync({
+			force : true
+		});
+	})).then(function() {
+		return result;
+	});
 }).then(function(models) {
 	return models;
 	// TODO: fix this code below
