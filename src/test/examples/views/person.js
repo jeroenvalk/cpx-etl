@@ -3,9 +3,9 @@ module.exports = function(cpx, _, Q) {
 		return {
 			Person : {
 				_ : {
+					unique: true,
+					required: false,
 					where : {
-						unique: true,
-						required: false,
 						name : $.name
 					}
 				},

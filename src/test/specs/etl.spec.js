@@ -86,6 +86,12 @@ describe("etl", function() {
 		etl.register(require('../examples/person.js'));
 	});
 
+	it("applyView", function(done) {
+		cpx.checkPromise(etl.applyView('person', {name: 'Terah'}).then(function(result) {
+			expect(result).to.deep.equal({Person: null});
+		}), done);
+	});
+
 	it("match", function() {
 		expect(etl.match({
 			_ : 'nonExisting'

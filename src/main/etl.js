@@ -23,6 +23,13 @@ var Sequelize = require('sequelize');
 
 var instance = null;
 
+var etlToSequelize = function ETL$etlToSequelize(query, model) {
+    var includes = _.map(_.pairs(_.omit(query, '_')), function(pair) {
+        return _.extend({model: model[pair[0]].sequelize}, etlToSequelize(pair[1], model));
+    });
+    return _.extend({}, includes, query._);
+};
+
 var dollar = function (view, bfish, promise) {
     return function $(key) {
         if (_.has(view.validation, key)) {
@@ -89,6 +96,24 @@ module.exports = class ETL {
         this.view[key] = {
             _: fn()
         };
+    };
+
+    applyView(key, $) {
+        var self = this;
+        var view = this.view[key]._;
+        return Q.all(_.map(_.pairs(view($)), function(pair) {
+            if (pair[1]._.unique) {
+                return self.model[pair[0]].sequelize.findOne(etlToSequelize(pair[1], self.model)).then(function(result) {
+                    return [pair[0], result];
+                });
+            } else {
+                return self.model[key].sequelize.findAll(etlToSequelize(pair[1], self.model)).then(function(result) {
+                    return [pair[0], result];
+                });
+            }
+        })).then(function(result) {
+           return _.object(result);
+        });
     };
 
     attributes(bfish) {
