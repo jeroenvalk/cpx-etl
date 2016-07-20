@@ -1,8 +1,8 @@
 describe("etl", function() {
 
 	var expect = require('chai').expect;
-	var ETL = require('../../main');
-	var etl = new ETL();
+	var cpx = require('../../main');
+	var etl = new cpx.ETL();
 
 	var example = [ {
 		name : 'Sarah',
@@ -40,8 +40,12 @@ describe("etl", function() {
 		father : 'Isaac'
 	} ];
 
+	before(function(done) {
+		cpx.checkPromise(require('../sequelize'), done);		
+	});
+	
 	it("register", function() {
-		require('../examples/person.js');
+		etl.register(require('../examples/person.js'));
 	});
 
 	it("convert", function() {

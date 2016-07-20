@@ -1,4 +1,4 @@
-require('../../main').register(function(_) {
+module.exports = function(_) {
 	var isName = function person$isName(val) {
 		return /^\w+$/.test(val) && val.charAt(0).toUpperCase() === val.charAt(0) && val.substr(1).toLowerCase() === val.substr(1);
 	};
@@ -102,4 +102,4 @@ require('../../main').register(function(_) {
 			}
 		}
 	};
-});
+};
