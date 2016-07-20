@@ -19,6 +19,7 @@
 
 var _ = require('underscore');
 var Q = require('q');
+var Sequelize = require('sequelize');
 
 var instance = null;
 
@@ -45,6 +46,8 @@ module.exports = class ETL {
             instance = this;
         }
         // defaults
+        this.model = {};
+        this.view = {};
         this.views = [];
         this.mapping = null;
         this.phase = 0;
@@ -54,6 +57,38 @@ module.exports = class ETL {
 
     register(fn) {
         this.views.push(fn());
+    };
+
+    registerModel(key, fn) {
+        var val = fn();
+        if (!(val instanceof Object)) {
+            throw new Error("ETL$registerModel: 'model.schema' must be an object");
+        }
+        var attributes = _.mapObject(val, function (val, key) {
+            if (!(val instanceof Object)) {
+                throw new Error("ETL$registerModel: field definition must be an object");
+            }
+            return _.mapObject(val, function (val, key) {
+                switch (key) {
+                    case 'type':
+                        return Sequelize[val];
+                    default:
+                        return val;
+                }
+            })
+        });
+        this.model[key] = {
+            source: val,
+            sequelize: this.sequelize.define(key.toLowerCase(), attributes, {
+                freezeTableName: true
+            })
+        };
+    };
+
+    registerView(key, fn) {
+        this.view[key] = {
+            _: fn()
+        };
     };
 
     attributes(bfish) {

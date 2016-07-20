@@ -2,7 +2,6 @@ describe("etl", function() {
 
 	var expect = require('chai').expect;
 	var cpx = require('../../main');
-	var etl = new cpx.ETL();
 
 	var example = [ {
 		name : 'Sarah',
@@ -40,12 +39,27 @@ describe("etl", function() {
 		father : 'Isaac'
 	} ];
 
+	var etl;
+
 	before(function(done) {
-		cpx.checkPromise(require('../sequelize'), done);		
-	});
-	
-	it("register", function() {
-		etl.register(require('../examples/person.js'));
+		var Sequelize = require('sequelize');
+
+		var inject = {
+			logger : require('winston'),
+			sequelize : new Sequelize('CPX', 'root', '', {
+				host : 'localhost',
+				dialect : 'mysql',
+				pool : {
+					max : 5,
+					min : 0,
+					idle : 10000
+				}
+			})
+		}
+
+		cpx.checkPromise(inject.sequelize.authenticate().then(function() {
+			etl = new cpx.ETL(inject);
+		}), done);
 	});
 
 	it("convert", function() {
@@ -64,6 +78,14 @@ describe("etl", function() {
 		});
 	});
 
+	it("register", function() {
+		etl.registerModel('Belonging', require('../examples/models/Belonging'));
+		etl.registerModel('Entity', require('../examples/models/Entity'));
+		etl.registerModel('Person', require('../examples/models/Person'));
+		etl.registerView('person', require('../examples/views/person'));
+		etl.register(require('../examples/person.js'));
+	});
+
 	it("match", function() {
 		expect(etl.match({
 			_ : 'nonExisting'
@@ -76,7 +98,7 @@ describe("etl", function() {
 		})).to.be.undefined;
 	});
 
-	it("validate", function() {
+	xit("validate", function() {
 		var errors = etl.validate(mapping, example);
 		expect(errors).to.be.an['instanceof'](Array).and.to.have.length(example.length);
 		_.each(errors, function(errors) {
@@ -84,7 +106,7 @@ describe("etl", function() {
 		});
 	});
 
-	it("extract", function(done) {
+	xit("extract", function(done) {
 		etl.extract(mapping, example).then(function(enriched) {
 			expect(etl.validate(mapping, example)).to.deep.equal([]);
 		});
