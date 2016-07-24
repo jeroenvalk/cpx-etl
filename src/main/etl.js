@@ -17,6 +17,7 @@
 
 'use strict';
 
+/* global require */
 var _ = require('underscore');
 var Q = require('q');
 var Sequelize = require('sequelize');
@@ -24,7 +25,7 @@ var Sequelize = require('sequelize');
 var instance = null;
 
 var etlToSequelize = function ETL$etlToSequelize(query, model) {
-    var includes = _.map(_.pairs(_.omit(query, '_')), function(pair) {
+    var includes = _.map(_.pairs(_.omit(query, '_')), function (pair) {
         return _.extend({model: model[pair[0]].sequelize}, etlToSequelize(pair[1], model));
     });
     return _.extend({}, includes, query._);
@@ -84,7 +85,7 @@ module.exports = class ETL {
                 }
             })
         });
-        this.model[key] = {
+        return this.model[key] = {
             source: val,
             sequelize: this.sequelize.define(key.toLowerCase(), attributes, {
                 freezeTableName: true
@@ -101,18 +102,18 @@ module.exports = class ETL {
     applyView(key, $) {
         var self = this;
         var view = this.view[key]._;
-        return Q.all(_.map(_.pairs(view($)), function(pair) {
+        return Q.all(_.map(_.pairs(view($)), function (pair) {
             if (pair[1]._.unique) {
-                return self.model[pair[0]].sequelize.findOne(etlToSequelize(pair[1], self.model)).then(function(result) {
+                return self.model[pair[0]].sequelize.findOne(etlToSequelize(pair[1], self.model)).then(function (result) {
                     return [pair[0], result];
                 });
             } else {
-                return self.model[key].sequelize.findAll(etlToSequelize(pair[1], self.model)).then(function(result) {
+                return self.model[key].sequelize.findAll(etlToSequelize(pair[1], self.model)).then(function (result) {
                     return [pair[0], result];
                 });
             }
-        })).then(function(result) {
-           return _.object(result);
+        })).then(function (result) {
+            return _.object(result);
         });
     };
 
@@ -129,8 +130,8 @@ module.exports = class ETL {
     convertJSONtoJSON(data, options) {
         if (data instanceof Array) {
             return _.map(data, function (data) {
-                return convertJSONtoJSON(data);
-            });
+                return this.convertJSONtoJSON(data, options);
+            }, this);
         } else if (data instanceof Object) {
             return _.object(_.map(_.pairs(data), function (entry) {
                 if (entry[1] instanceof Object) {
@@ -186,6 +187,37 @@ module.exports = class ETL {
         }
         this.message = msg;
         this.mapping = mapping;
+    };
+
+    getValue(key, index) {
+        var result = isNaN(index) ? this.message : this.message[index];
+        var part = key.split('.');
+        for (var i = 0; i < part.length; ++i) {
+            if (result instanceof Object) {
+                result = result[part[i]];
+            } else {
+                throw new Error('ETL$getValue: key not found: ' + key);
+            }
+        }
+        return result;
+    };
+
+    execMatchValidate(index) {
+        if (isNaN(index) && this.message instanceof Array) {
+            return _.map(_.range(this.message.length), function(index) {
+                return this.execMatchValidate(index);
+            }, this);
+        }
+        return _.mapObject(this.mapping.match.validate, function (val, key) {
+            var value = this.getValue(key, index);
+            return !_.some(val, function (val) {
+                if (typeof val === 'function') {
+                    return val(value);
+                } else {
+                    return value === val;
+                }
+            });
+        }, this);
     };
 
     applyPatch(message, patch) {

@@ -1,18 +1,16 @@
 module.exports = function (_) {
     var isName = function person$isName(val) {
-        return /^\w+$/.test(val) && val.charAt(0).toUpperCase() === val.charAt(0) && val.substr(1).toLowerCase() === val.substr(1);
+        return val && /^\w+$/.test(val) && val.charAt(0).toUpperCase() === val.charAt(0) && val.substr(1).toLowerCase() === val.substr(1);
     };
 
     return {
         match: {
             _: 'familyTree',
             validate: {
-                '_META.@type': true,
-                '_META.@force': [false, 'boolean'],
-                '@name': isName,
-                '@mother': [false, isName],
-                '@father': [false, isName],
-                '@type': false
+                '@name': [isName],
+                '@mother': [undefined, isName],
+                '@father': [undefined, isName],
+                '@type': [undefined]
             },
             defaults: {
                 '@type': 'person'
