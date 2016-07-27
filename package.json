@@ -1,6 +1,6 @@
 {
   "name": "cpx-etl",
-  "version": "0.2.0-SNAPSHOT",
+  "version": "0.2.0",
   "repository": "git@github.com:jeroenvalk/cpx-etl.git",
   "main": "src/main",
   "scripts": {
