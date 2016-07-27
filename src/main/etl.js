@@ -28,7 +28,7 @@ var etlToSequelize = function ETL$etlToSequelize(query, model) {
     var includes = _.map(_.pairs(_.omit(query, '_')), function (pair) {
         return _.extend({model: model[pair[0]].sequelize}, etlToSequelize(pair[1], model));
     });
-    return _.extend({}, includes, query._);
+    return _.extend({}, {include: includes}, query._);
 };
 
 var dollar = function (view, bfish, promise) {
@@ -59,6 +59,7 @@ module.exports = class ETL {
         this.views = [];
         this.mapping = null;
         this.phase = 0;
+        this.sequelizeConfig = {};
 
         _.extend(this, inject);
     };
@@ -87,9 +88,9 @@ module.exports = class ETL {
         });
         return this.model[key] = {
             source: val,
-            sequelize: this.sequelize.define(key.toLowerCase(), attributes, {
+            sequelize: this.sequelize.define(key.charAt(0).toLowerCase() + key.substr(1), attributes, _.extend({
                 freezeTableName: true
-            })
+            }, this.sequelizeConfig))
         };
     };
 
@@ -103,13 +104,14 @@ module.exports = class ETL {
         var self = this;
         var view = this.view[key]._;
         return Q.all(_.map(_.pairs(view($)), function (pair) {
+            var query = etlToSequelize(pair[1], self.model);
             if (pair[1]._.unique) {
-                return self.model[pair[0]].sequelize.findOne(etlToSequelize(pair[1], self.model)).then(function (result) {
-                    return [pair[0], result];
+                return self.model[pair[0]].sequelize.findOne(query).then(function (result) {
+                    return [pair[0], result? result.get({plain: true}) : null];
                 });
             } else {
-                return self.model[key].sequelize.findAll(etlToSequelize(pair[1], self.model)).then(function (result) {
-                    return [pair[0], result];
+                return self.model[pair[0]].sequelize.findAll(query).then(function (results) {
+                    return [pair[0], _.map(results, function(result) {return result.get({plain: true})})];
                 });
             }
         })).then(function (result) {

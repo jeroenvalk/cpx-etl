@@ -17,7 +17,7 @@ module.exports = function (cpx, _, Q) {
                             type: 'person'
                         }
                     },
-                    Entity: {
+                    Belonging: {
                         _: {
                             unique: true,
                             required: false,

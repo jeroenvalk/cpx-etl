@@ -80,11 +80,13 @@ describe("etl", function () {
     });
 
     it("register", function () {
-        etl.registerModel('Belonging', require('../examples/models/Belonging'));
         var Entity = etl.registerModel('Entity', require('../examples/models/Entity')).sequelize;
+        var Belonging = etl.registerModel('Belonging', require('../examples/models/Belonging')).sequelize;
         var Person = etl.registerModel('Person', require('../examples/models/Person')).sequelize;
+
+        Entity.hasMany(Belonging, {foreignKey: 'minorID'});
         Person.belongsTo(Entity, {foreignKey: 'ID'});
-        //Entity.hasOne(Person);
+
         etl.registerView('person', require('../examples/views/person'));
         etl.register(require('../examples/person.js'));
     });
