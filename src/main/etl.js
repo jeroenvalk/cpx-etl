@@ -31,6 +31,33 @@ var etlToSequelize = function ETL$etlToSequelize(query, model) {
     return _.extend({}, {include: includes}, query._);
 };
 
+var applyValidation = function ETL$applyValidation(prefix, validation, data, result) {
+    if (validation instanceof Array) {
+        for (var i = 0; i<validation.length; ++i) {
+            if (validation[i] instanceof Function) {
+                if (validation[i](data) === true) {
+                    return;
+                }
+            } else {
+                if (validation[i] === data) {
+                    return;
+                }
+            }
+        }
+        result[prefix.substr(1)] = null;
+    } else {
+        _.each(_.keys(validation), function (key) {
+            if (data[key] instanceof Array) {
+                for (var i = 0; i < data[key].length; ++i) {
+                    applyValidation(prefix + '.' + key + '.' + i, validation[key], data[key][i], result);
+                }
+            } else {
+                applyValidation(prefix + '.' + key, validation[key], data[key], result);
+            }
+        });
+    }
+};
+
 var dollar = function (view, bfish, promise) {
     return function $(key) {
         if (_.has(view.validation, key)) {
@@ -56,6 +83,7 @@ module.exports = class ETL {
         // defaults
         this.model = {};
         this.view = {};
+        this.validation = {};
         this.views = [];
         this.mapping = null;
         this.phase = 0;
@@ -100,6 +128,10 @@ module.exports = class ETL {
         };
     };
 
+    registerValidation(key, fn) {
+        this.validation[key] = fn(_);
+    };
+
     applyView(key, $) {
         var self = this;
         var view = this.view[key]._;
@@ -107,16 +139,24 @@ module.exports = class ETL {
             var query = etlToSequelize(pair[1], self.model);
             if (pair[1]._.unique) {
                 return self.model[pair[0]].sequelize.findOne(query).then(function (result) {
-                    return [pair[0], result? result.get({plain: true}) : null];
+                    return [pair[0], result ? result.get({plain: true}) : null];
                 });
             } else {
                 return self.model[pair[0]].sequelize.findAll(query).then(function (results) {
-                    return [pair[0], _.map(results, function(result) {return result.get({plain: true})})];
+                    return [pair[0], _.map(results, function (result) {
+                        return result.get({plain: true})
+                    })];
                 });
             }
         })).then(function (result) {
             return _.object(result);
         });
+    };
+
+    applyValidation(key, data) {
+        var result = {};
+        applyValidation('', this.validation[key], data, result);
+        return result;
     };
 
     attributes(bfish) {
@@ -206,7 +246,7 @@ module.exports = class ETL {
 
     execMatchValidate(index) {
         if (isNaN(index) && this.message instanceof Array) {
-            return _.map(_.range(this.message.length), function(index) {
+            return _.map(_.range(this.message.length), function (index) {
                 return this.execMatchValidate(index);
             }, this);
         }
