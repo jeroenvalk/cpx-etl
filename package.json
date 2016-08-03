@@ -4,15 +4,17 @@
   "repository": "git@github.com:jeroenvalk/cpx-etl.git",
   "main": "src/main",
   "scripts": {
-    "test": "mocha src/test/specs/etl.spec.js"
+    "test": "mocha src/test/specs/etl.spec.js --reporter mochawesome --reporter-options reportDir=target"
   },
   "dependencies": {
-    "underscore": "~1.8.3",
     "q": "~1.4.1",
-    "winston": "~2.2.0"
+    "underscore": "~1.8.3",
+    "winston": "~2.2.0",
+    "xlsx": "^0.8.0"
   },
   "devDependencies": {
     "chai": "~3.5.0",
+    "mochawesome": "^1.4.0",
     "mysql": "^2.11.1",
     "sequelize": "^3.23.6"
   }
