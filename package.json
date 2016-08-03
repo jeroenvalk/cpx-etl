@@ -1,12 +1,13 @@
 {
   "name": "cpx-etl",
-  "version": "0.2.1",
+  "version": "0.2.2-SNAPSHOT",
   "repository": "git@github.com:jeroenvalk/cpx-etl.git",
   "main": "src/main",
   "scripts": {
     "test": "mocha src/test/specs/etl.spec.js --reporter mochawesome --reporter-options reportDir=target"
   },
   "dependencies": {
+    "libxslt": "^0.6.3",
     "q": "~1.4.1",
     "underscore": "~1.8.3",
     "winston": "~2.2.0",
