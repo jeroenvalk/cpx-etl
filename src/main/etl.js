@@ -31,9 +31,53 @@ var etlToSequelize = function ETL$etlToSequelize(query, model) {
     return _.extend({}, {include: includes}, query._);
 };
 
+var applyPath = function ETL$applyPath(data, path) {
+    console.log(data);
+    var $ = data.$ ? data.$ : data;
+    var parts = path.split('.');
+    _.each(parts, function (part, index) {
+        switch (part.charAt(0)) {
+            case '$':
+                data = $;
+                break;
+            case '#':
+                if (index !== parts.length - 1) {
+                    throw new Error("ETL$applyPath: " + parts.join('.') + ": '" + part + "' must be last element");
+                }
+                if (part === '#') {
+                    data = data['#'];
+                } else {
+                    data = data[part.substr(1)];
+                    if (!(data instanceof Array)) {
+                        throw new Error("ETL$applyPath: " + parts.join('.') + ": array expected");
+                    }
+                    data = data.length;
+                }
+                break;
+            default:
+                if (data instanceof Object) {
+                    data = data[part];
+                } else {
+                    console.log(data);
+                    throw new Error('ETL$applyPath: ' + parts.slice(0, index).join('.') + ': not found');
+                }
+                break;
+        }
+    });
+    if (data instanceof Object) {
+        if (data instanceof Array) {
+            data.$ = $;
+            return data;
+        }
+        if (data.constructor === Object)
+            return _.extend({$: $}, data);
+    }
+    return data;
+};
+
 var applyValidation = function ETL$applyValidation(prefix, validation, data, result) {
     if (validation instanceof Array) {
-        for (var i = 0; i<validation.length; ++i) {
+        for (var i = 0; i < validation.length; ++i) {
             if (validation[i] instanceof Function) {
                 if (validation[i](data) === true) {
                     return;
@@ -122,14 +166,115 @@ module.exports = class ETL {
         };
     };
 
+    registerSchema(key, fn) {
+        throw new Error('not yet implemented');
+    };
+
+    registerTransform(key, fn) {
+        var transform = fn(_);
+        if (!(transform instanceof Object)) {
+            throw new Error('etl.registerTransform: mapping must be object or array');
+        }
+        this.transform[key] = fn(_);
+    };
+
+    registerValidation(key, fn) {
+        this.validation[key] = fn(_);
+    };
+
     registerView(key, fn) {
         this.view[key] = {
             _: fn()
         };
     };
 
-    registerValidation(key, fn) {
-        this.validation[key] = fn(_);
+    applyTransform(name, data, transform, trail) {
+        console.log('applyTransform: ' + trail);
+        console.log(transform);
+        if (!trail) {
+            trail = '';
+        } else {
+            if (!data.$) {
+                console.log(data);
+                throw new Error('etl.applyTransform: root not defined');
+            }
+        }
+        if (name) {
+            transform = this.transform[name] = transform || this.transform[name];
+            if (!transform) {
+                throw new Error("etl.applyTransform: mapping '" + name + "' not found");
+            }
+        } else {
+            if (!transform) {
+                throw new Error('etl.applyTransform: "' + trail + '": no mapping specified');
+            }
+        }
+        if (!(data instanceof Object)) {
+            throw new Error('etl.applyTransform: "' + trail + '": invalid data');
+        }
+        if (transform instanceof Array) {
+            var options = {
+                unique: false,
+                required: false
+            };
+            switch (transform.length) {
+                case 0:
+                    return undefined;
+                case 1:
+                    break;
+                case 2:
+                    _.extend(options, transform[1]);
+                    break;
+                default:
+                    throw new Error('etl.applyTransform: syntax error');
+            }
+            transform = transform[0];
+            if (!(transform instanceof Object)) {
+                throw new Error('etl.applyTransform: syntax error');
+            }
+            if (!options.unique) {
+                if (data instanceof Array) {
+                    var $ = data.$;
+                    return _.map(data, function (data, index) {
+                        data.$ = $;
+                        data['#'] = index;
+                        return this.applyTransform(null, data, transform, trail);
+                    }, this);
+                }
+                console.log(data);
+                throw new Error('etl.applyTransform: "' + trail + '": array expected');
+            }
+        }
+        if (data instanceof Array) {
+            throw new Error('etl.applyTransform: "' + trail + '": object expected');
+        }
+        return _.mapObject(transform, function (val, key) {
+            if (val instanceof Array && !(val[0] instanceof Object)) {
+                var path = val.shift();
+                if (path) {
+                    if (val.length) {
+                        return this.applyTransform(null, applyPath(data, path), val, trail + path);
+                    } else {
+                        var result = applyPath(data, path);
+                        if (result instanceof Array || (result && result.constructor === Object)) {
+                            console.log(data);
+                            throw new Error('etl.applyTransform: "' + trail + '": value expected @ ' + path);
+                        }
+                        return result;
+                    }
+                }
+            } else if (val instanceof Object) {
+                return this.applyTransform(null, data, val, trail);
+            } else {
+                return val;
+            }
+        }, this);
+    };
+
+    applyValidation(key, data) {
+        var result = {};
+        applyValidation('', this.validation[key], data, result);
+        return result;
     };
 
     applyView(key, $) {
@@ -139,11 +284,11 @@ module.exports = class ETL {
             var query = etlToSequelize(pair[1], self.model);
             if (pair[1]._.unique) {
                 return self.model[pair[0]].sequelize.findOne(query).then(function (result) {
-                    return [pair[0], result ? result.get({plain: true}) : null];
+                    return [pair[0].charAt(0).toLowerCase() + pair[0].substr(1), result ? result.get({plain: true}) : null];
                 });
             } else {
                 return self.model[pair[0]].sequelize.findAll(query).then(function (results) {
-                    return [pair[0], _.map(results, function (result) {
+                    return [pair[0].charAt(0).toLowerCase() + pair[0].substr(1), _.map(results, function (result) {
                         return result.get({plain: true})
                     })];
                 });
@@ -151,12 +296,6 @@ module.exports = class ETL {
         })).then(function (result) {
             return _.object(result);
         });
-    };
-
-    applyValidation(key, data) {
-        var result = {};
-        applyValidation('', this.validation[key], data, result);
-        return result;
     };
 
     attributes(bfish) {
