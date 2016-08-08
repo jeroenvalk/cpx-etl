@@ -1,6 +1,6 @@
 var fs = require('fs');
 var _ = require('underscore');
-var libxslt = require('libxslt');
+var libxslt;
 var XLSX = require('xlsx');
 
 var ETL = require('./etl.js');
@@ -90,6 +90,9 @@ function xslPipeline(input, array, callback) {
 
 function xslTransform(transform, encoding) {
     "use strict";
+    if (!libxslt) {
+        libxslt = require('libxslt');
+    }
     transform = resolveXIncludes(transform, encoding);
     if (transform instanceof Array) {
         _.map(transform, function (transform) {
