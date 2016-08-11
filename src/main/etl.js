@@ -20,6 +20,7 @@
 /* global require */
 var _ = require('underscore');
 var Q = require('q');
+var moment = require('moment');
 var Sequelize = require('sequelize');
 
 var instance = null;
@@ -32,7 +33,6 @@ var etlToSequelize = function ETL$etlToSequelize(query, model) {
 };
 
 var applyPath = function ETL$applyPath(data, path) {
-    console.log(data);
     var $ = data.$ ? data.$ : data;
     var parts = path.split('.');
     _.each(parts, function (part, index) {
@@ -58,7 +58,6 @@ var applyPath = function ETL$applyPath(data, path) {
                 if (data instanceof Object) {
                     data = data[part];
                 } else {
-                    console.log(data);
                     throw new Error('ETL$applyPath: ' + parts.slice(0, index).join('.') + ': not found');
                 }
                 break;
@@ -127,6 +126,7 @@ module.exports = class ETL {
         // defaults
         this.model = {};
         this.view = {};
+        this.schema = {};
         this.validation = {};
         this.views = [];
         this.mapping = null;
@@ -179,7 +179,7 @@ module.exports = class ETL {
     };
 
     registerValidation(key, fn) {
-        this.validation[key] = fn(_);
+        this.validation[key] = fn(_, moment);
     };
 
     registerView(key, fn) {
@@ -188,9 +188,98 @@ module.exports = class ETL {
         };
     };
 
+    applySchema(name, data, force, schema, trail) {
+        var original = data;
+        if (!trail) {
+            trail = '';
+        }
+        if (name) {
+            if (schema) {
+                this.schema[name] = schema;
+            } else {
+                schema = this.schema[name];
+            }
+        }
+        if (schema instanceof Array) {
+            if (typeof schema[0] === 'string') {
+                switch (schema[0]) {
+                    case '*':
+                        break;
+                    case 'Boolean':
+                        if (data === '') data = null;
+                        if (data === null) break;
+                    case 'boolean':
+                        if (force && (typeof data === 'string' || typeof data === 'number')) {
+                            if (data === 'false') {
+                                data = false;
+                            } else {
+                                data = !!data;
+                            }
+                        }
+                        if (typeof data !== 'boolean') {
+                            throw new Error('applySchema: ' + trail + ': boolean expected but got ' + data);
+                        }
+                        break;
+                    case 'Number':
+                        if (data === '') data = null;
+                        if (data === null) break;
+                    case 'number':
+                        if (force && typeof data === 'string') {
+                            data = parseInt(data);
+                        }
+                        if (typeof data !== 'number' || isNaN(data) || data === Infinity) {
+                            throw new Error('applySchema: ' + trail + ': number expected but got ' + JSON.stringify(original));
+                        }
+                        break;
+                    case 'Date':
+                        if (data === '0000-00-00') data = null;
+                        if (data === null) break;
+                    case 'date':
+                        if (data instanceof Date) {
+                            data = moment(data);
+                        }
+                        if (!data || !data.isValid || !data.isValid()) {
+                            throw new Error('applySchema: ' + trail + ': date expected');
+                        }
+                        break;
+                    case 'String':
+                        if (data === null) break;
+                    case 'string':
+                        if (typeof data !== 'string') {
+                            throw new Error('applySchema: ' + trail + ': string expected but got ' + JSON.stringify(original));
+                        }
+                        break;
+                    default:
+                        throw new Error('applySchema: ' + trail + ': invalid type: ' + schema[0]);
+                }
+                return data;
+            } else {
+                if (data instanceof Array) {
+                    _.each(data, function (data, index) {
+                        this.applySchema(null, data, force, schema[0], [trail, index].join('.'));
+                    }, this);
+                } else {
+                    throw new Error('applySchema: ' + trail + ': array expected');
+                }
+            }
+        } else {
+            if (data instanceof Array) {
+                throw new Error('applySchema: ' + trail + ': object expected');
+            }
+            _.each(_.keys(data), function (key) {
+                if (!_.has(data, key)) throw new Error('applySchema: ' + trail + ': invalid property: ' + key);
+            });
+            _.each(_.keys(schema), function (key) {
+                if (!_.has(data, key)) throw new Error('applySchema: ' + trail + ': property missing: ' + key);
+                var result = this.applySchema(null, data[key], force, schema[key], [trail, key].join('.'));
+                if (result !== undefined) data[key] = result;
+            }, this);
+        }
+    };
+
     applyTransform(name, data, transform, trail) {
-        console.log('applyTransform: ' + trail);
-        console.log(transform);
+        //console.log('applyTransform: ' + trail);
+        //console.log(transform);
         if (!trail) {
             trail = '';
         } else {
@@ -271,10 +360,61 @@ module.exports = class ETL {
         }, this);
     };
 
-    applyValidation(key, data) {
-        var result = {};
-        applyValidation('', this.validation[key], data, result);
-        return result;
+    applyValidation(name, data, validation, trail, root) {
+        if (!trail) {
+            trail = [];
+            root = data;
+        }
+        trail.value = function () {
+            var path = _.flatten(Array.prototype.slice.call(arguments));
+            return _.reduce(path, function (data, key) {
+                return key === '$' ? root : data[key];
+            }, data);
+        }
+        if (name) {
+            if (validation) {
+                this.validation[name] = validation;
+            } else {
+                validation = this.validation[name];
+            }
+        }
+        console.log(trail);
+        if (validation instanceof Array) {
+            return _.find(validation, function (clause) {
+                var expr = clause.expr;
+                if (clause instanceof Array) {
+                    expr = clause;
+                }
+                return !_.some(expr, function (literal) {
+                    if (literal instanceof Function) {
+                        return literal.call({
+                            value: function () {
+                                var path = _.flatten(Array.prototype.slice.call(arguments));
+                                return _.reduce(path, function (data, key) {
+                                    return path[key];
+                                }, root);
+                            }
+                        }, data, trail);
+                    }
+                    return data === literal;
+                });
+            });
+        }
+        if (data instanceof Array) {
+            _.each(data, function (data, index) {
+                this.applyValidation(null, data, validation, trail.concat([index]), root);
+            }, this);
+            return;
+        }
+        console.log(trail);
+        data._ = _.mapObject(validation, function (val, key) {
+            return this.applyValidation(null, data[key], val, trail.concat([key]), root);
+        }, this);
+        _.each(_.keys(data._), function (key) {
+            if (!(data._[key] instanceof Object)) {
+                delete data._[key];
+            }
+        });
     };
 
     applyView(key, $) {
