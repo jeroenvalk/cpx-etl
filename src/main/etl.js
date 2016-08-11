@@ -202,12 +202,18 @@ module.exports = class ETL {
         }
         if (schema instanceof Array) {
             if (typeof schema[0] === 'string') {
+                var size = schema[1] ? schema[1].size : undefined;
                 switch (schema[0]) {
                     case '*':
                         break;
                     case 'Boolean':
                         if (data === '') data = null;
-                        if (data === null) break;
+                        if (data === null) {
+                            if (force === 'TRUE' && !isNaN(size)) {
+                                data = Array(size + 1).join(' ');
+                                break;
+                            }
+                        };
                     case 'boolean':
                         if (force && (typeof data === 'string' || typeof data === 'number')) {
                             if (data === 'false') {
@@ -219,10 +225,22 @@ module.exports = class ETL {
                         if (typeof data !== 'boolean') {
                             throw new Error('applySchema: ' + trail + ': boolean expected but got ' + data);
                         }
+                        if (force === 'TRUE' && !isNaN(size)) {
+                            switch(data) {
+                                case false: data = Array(size + 1).join('0'); break;
+                                case true: data = Array(size).join('0') + '1'; break;
+                                default: throw new Error('internal error');
+                            }
+                        }
                         break;
                     case 'Number':
                         if (data === '') data = null;
-                        if (data === null) break;
+                        if (data === null) {
+                            if (force === 'TRUE' && !isNaN(size)) {
+                                data = Array(size + 1).join(' ');
+                            }
+                            break;
+                        };
                     case 'number':
                         if (force && typeof data === 'string') {
                             data = parseInt(data);
@@ -230,10 +248,19 @@ module.exports = class ETL {
                         if (typeof data !== 'number' || isNaN(data) || data === Infinity) {
                             throw new Error('applySchema: ' + trail + ': number expected but got ' + JSON.stringify(original));
                         }
+                        if (force === 'TRUE' && !isNaN(size)) {
+                            data = (data + '').substr(0, size);
+                            data = Array(size - data.length + 1).join('0') + data;
+                        }
                         break;
                     case 'Date':
                         if (data === '0000-00-00') data = null;
-                        if (data === null) break;
+                        if (data === null) {
+                            if (force === 'TRUE' && !isNaN(size)) {
+                                data = '00000000';
+                            }
+                            break;
+                        }
                     case 'date':
                         if (data instanceof Date) {
                             data = moment(data);
@@ -241,12 +268,24 @@ module.exports = class ETL {
                         if (!data || !data.isValid || !data.isValid()) {
                             throw new Error('applySchema: ' + trail + ': date expected');
                         }
+                        if (force === 'TRUE' && !isNaN(size)) {
+                            data = data.format('YYYYMMDD');
+                        }
                         break;
                     case 'String':
-                        if (data === null) break;
+                        if (data === null) {
+                            if (force === 'TRUE' && !isNaN(size)) {
+                                data = Array(size + 1).join(' ');
+                            }
+                            break;
+                        }
                     case 'string':
                         if (typeof data !== 'string') {
                             throw new Error('applySchema: ' + trail + ': string expected but got ' + JSON.stringify(original));
+                        }
+                        if (force === 'TRUE' && !isNaN(size)) {
+                            data = data.substr(0, size);
+                            data += Array(size - data.length + 1).join(' ');
                         }
                         break;
                     default:
@@ -378,7 +417,6 @@ module.exports = class ETL {
                 validation = this.validation[name];
             }
         }
-        console.log(trail);
         if (validation instanceof Array) {
             return _.find(validation, function (clause) {
                 var expr = clause.expr;
