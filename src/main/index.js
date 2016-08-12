@@ -126,6 +126,11 @@ function xslTransform(transform, encoding) {
 };
 
 module.exports = {
+    getLogger: function cpx$getLogger(constructor) {
+        "use strict";
+        // TODO: make nice loggers that show the classname etc.
+        return require('winston');
+    },
     checkPromise: function cpx$checkPromise(promise, done) {
         promise.then(function () {
             done();

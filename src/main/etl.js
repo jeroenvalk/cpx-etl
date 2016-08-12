@@ -213,7 +213,7 @@ module.exports = class ETL {
                                 data = Array(size + 1).join(' ');
                                 break;
                             }
-                        };
+                        }
                     case 'boolean':
                         if (force && (typeof data === 'string' || typeof data === 'number')) {
                             if (data === 'false') {
@@ -226,10 +226,15 @@ module.exports = class ETL {
                             throw new Error('applySchema: ' + trail + ': boolean expected but got ' + data);
                         }
                         if (force === 'TRUE' && !isNaN(size)) {
-                            switch(data) {
-                                case false: data = Array(size + 1).join('0'); break;
-                                case true: data = Array(size).join('0') + '1'; break;
-                                default: throw new Error('internal error');
+                            switch (data) {
+                                case false:
+                                    data = Array(size + 1).join('0');
+                                    break;
+                                case true:
+                                    data = Array(size).join('0') + '1';
+                                    break;
+                                default:
+                                    throw new Error('internal error');
                             }
                         }
                         break;
@@ -240,7 +245,7 @@ module.exports = class ETL {
                                 data = Array(size + 1).join(' ');
                             }
                             break;
-                        };
+                        }
                     case 'number':
                         if (force && typeof data === 'string') {
                             data = parseInt(data);
@@ -444,15 +449,24 @@ module.exports = class ETL {
             }, this);
             return;
         }
-        console.log(trail);
-        data._ = _.mapObject(validation, function (val, key) {
-            return this.applyValidation(null, data[key], val, trail.concat([key]), root);
+        data._ = _.mapObject(_.clone(validation), function (val, key) {
+            var result = this.applyValidation(null, data[key], val, trail.concat([key]), root);
+            if (result instanceof Array) {
+                return null;
+            }
+            return result;
         }, this);
         _.each(_.keys(data._), function (key) {
-            if (!(data._[key] instanceof Object)) {
+            if (data._[key] === undefined) {
                 delete data._[key];
+            } else {
+                if (data._[key])
+                    delete data._[key].expr;
             }
         });
+        if (_.isEmpty(data._)) {
+            delete data._;
+        }
     };
 
     applyView(key, $) {
