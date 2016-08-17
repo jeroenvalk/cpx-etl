@@ -136,6 +136,10 @@ module.exports = {
             done();
         }, done);
     },
+    callbackPromise: function cpx$callbackPromise(fn) {
+        "use strict";
+        return callbackPromise(fn, []);
+    },
     convert: function cpx$convert(buffer, mimetype) {
         "use strict";
         switch (mimetype) {
