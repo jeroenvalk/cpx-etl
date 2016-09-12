@@ -157,6 +157,9 @@ module.exports = {
                 throw new Error("unsupported mimetype");
         }
     },
+    describe: function cpx$describe(glob, testCase) {
+        "use strict";
+    },
     execute: function cpx$execute(entity, mimetype, encoding) {
         "use strict";
         var transform = entity['cpx:transform'];
@@ -190,5 +193,6 @@ module.exports = {
         }
         return result;
     },
-    ETL: ETL
+    ETL: ETL,
+    FileResolver: require('./FileResolver')
 };
